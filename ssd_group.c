@@ -106,6 +106,8 @@ int ssd_group_write(struct ssd_group *group, struct nvm_addr blk_addr, struct nv
 		       strlen(meta_descr));
 	}
 	
+	int res = -1;
+	
 	for (int pg = 0; pg < geo->npages; ++pg) {
 		for (int i = 0; i < naddrs; ++i) {
 			addrs[i].ppa = blk_addr.ppa;
@@ -116,7 +118,6 @@ int ssd_group_write(struct ssd_group *group, struct nvm_addr blk_addr, struct nv
 		}
 
 		int num = group->ssd_number;
-		int res = -1;
 		for (int j = 0; j < num; j++){
 			res = nvm_addr_write(group->ssd_list[j], addrs, naddrs, buf_w, use_meta ? meta_w : NULL, pmode, ret);
 			if (res < 0) {
@@ -125,6 +126,8 @@ int ssd_group_write(struct ssd_group *group, struct nvm_addr blk_addr, struct nv
 			}
 		}
 	}
+	if (res < 0)
+		return 0;
 	return 1;
 }
 
@@ -150,7 +153,8 @@ int ssd_group_read(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm
 		printf("alloc meta_r error!\n");
 		return 0;
 	}
-
+	
+	int res = -1;
 	for (int pg = 0; pg < geo->npages; ++pg) {
 		for (int i = 0; i < naddrs; ++i) {
 			addrs[i].ppa = blk_addr.ppa;
@@ -164,7 +168,6 @@ int ssd_group_read(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm
 		if (use_meta)
 			memset(meta_r, 0 , meta_nbytes);
 		int num = group->ssd_number;
-		int res = -1;
 		for (int j = 0; j < num; j++){
 			res = nvm_addr_read(group->ssd_list[j], addrs, naddrs, buf_r, use_meta ? meta_r : NULL, pmode, ret);
 			if (res < 0 && j < num-1) 
@@ -179,6 +182,8 @@ int ssd_group_read(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm
 			}
 		}
 	}
+	if (res < 0)
+		return 0;
 	return 1;
 }
 	
