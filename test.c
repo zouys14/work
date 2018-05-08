@@ -31,8 +31,18 @@ int main(){
 	int res = ssd_group_erase(group, blk_addr, geo, ret);
 	if (res > 0)
 		printf ("erase ssd_group sucessful!\n");
+
+	res = ssd_group_write(group, blk_addr, geo, ret);
+	if (res > 0)
+		printf ("write ssd_group sucessful!\n");
+	else
+		printf ("write ssd_group failed!\n");
 	
-	
+	res = ssd_group_read(group, blk_addr, geo, ret);
+	if (res > 0)
+		printf ("read ssd_group sucessful!\n");
+	else
+		printf ("read ssd_group failed!\n");
 
 	free_ssd_group(group);
 	return 0;

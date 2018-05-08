@@ -16,6 +16,10 @@ void ssd_group_pr(const struct ssd_group *group);
 
 void free_ssd_group(struct ssd_group *group);
 
-int ssd_group_erase(struct ssd_group *group, struct nvm_addr addr, struct nvm_geo *geo, struct nvm_ret *ret);
+int ssd_group_erase(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm_geo *geo, struct nvm_ret *ret);
+
+int ssd_group_write(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm_geo *geo, struct nvm_ret *ret);
+
+int ssd_group_read(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm_geo *geo, struct nvm_ret *ret);
 
 #endif

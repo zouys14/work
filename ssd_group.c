@@ -63,4 +63,122 @@ int ssd_group_erase(struct ssd_group *group, struct nvm_addr blk_addr, struct nv
 	}
 	return 1;
 }
+
+int ssd_group_write(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm_geo *geo, struct nvm_ret *ret)
+{
+	int naddrs = geo->nplanes * geo->nsectors;
+	int use_meta = 0;
+	int pmode = nvm_dev_get_pmode(group->ssd_list[0]);
+	struct nvm_addr addrs[naddrs];
+	char *buf_w = NULL, *meta_w = NULL;
+
+	int buf_nbytes = naddrs * geo->sector_nbytes;
+	int meta_nbytes = naddrs * geo->meta_nbytes;
+	
+	buf_w = nvm_buf_alloc(geo, buf_nbytes);
+	if (!buf_w) {
+		printf("alloc buf_w error!\n");
+		return 0;
+	}
+	nvm_buf_fill(buf_w, buf_nbytes);
+
+	meta_w = nvm_buf_alloc(geo, meta_nbytes);
+	if (!meta_w) {
+		printf("alloc meta_w error!\n");
+		return 0;
+	}
+	for (int i = 0; i < meta_nbytes; ++i) {
+		meta_w[i] = 65;
+	}
+	
+	for (int i = 0; i < naddrs; ++i) {
+		char meta_descr[meta_nbytes];
+		int sec = i % geo->nsectors;
+		int pl = (i / geo->nsectors) % geo->nplanes;
+
+		sprintf(meta_descr, "[P(%02d),S(%02d)]", pl, sec);
+		if (strlen(meta_descr) > geo->meta_nbytes) {
+			printf("meta_descr error!\n");
+			return 0;
+		}
+
+		memcpy(meta_w + i * geo->meta_nbytes, meta_descr,
+		       strlen(meta_descr));
+	}
+	
+	for (int pg = 0; pg < geo->npages; ++pg) {
+		for (int i = 0; i < naddrs; ++i) {
+			addrs[i].ppa = blk_addr.ppa;
+
+			addrs[i].g.pg = pg;
+			addrs[i].g.sec = i % geo->nsectors;
+			addrs[i].g.pl = (i / geo->nsectors) % geo->nplanes;
+		}
+
+		int num = group->ssd_number;
+		int res = -1;
+		for (int j = 0; j < num; j++){
+			res = nvm_addr_write(group->ssd_list[j], addrs, naddrs, buf_w, use_meta ? meta_w : NULL, pmode, ret);
+			if (res < 0) {
+				printf("write data error in dev %s!\n",nvm_dev_get_name(group->ssd_list[j]));
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+
+int ssd_group_read(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm_geo *geo, struct nvm_ret *ret)
+{
+	int naddrs = geo->nplanes * geo->nsectors;
+	int use_meta = 0;
+	int pmode = nvm_dev_get_pmode(group->ssd_list[0]);
+	struct nvm_addr addrs[naddrs];
+	char *buf_r = NULL, *meta_r = NULL;
+
+	int buf_nbytes = naddrs * geo->sector_nbytes;
+	int meta_nbytes = naddrs * geo->meta_nbytes;
+
+	buf_r = nvm_buf_alloc(geo, buf_nbytes);
+	if (!buf_r) {
+		printf("alloc buf_r error!\n");
+		return 0;
+	}
+
+	meta_r = nvm_buf_alloc(geo, meta_nbytes);
+	if (!meta_r) {
+		printf("alloc meta_r error!\n");
+		return 0;
+	}
+
+	for (int pg = 0; pg < geo->npages; ++pg) {
+		for (int i = 0; i < naddrs; ++i) {
+			addrs[i].ppa = blk_addr.ppa;
+
+			addrs[i].g.pg = pg;
+			addrs[i].g.pl = (i / geo->nsectors) % geo->nplanes;
+			addrs[i].g.sec = i % geo->nsectors;
+		}
+
+		memset(buf_r, 0, buf_nbytes);
+		if (use_meta)
+			memset(meta_r, 0 , meta_nbytes);
+		int num = group->ssd_number;
+		int res = -1;
+		for (int j = 0; j < num; j++){
+			res = nvm_addr_read(group->ssd_list[j], addrs, naddrs, buf_r, use_meta ? meta_r : NULL, pmode, ret);
+			if (res < 0 && j < num-1) 
+				printf("read page %d error in dev %s!\n", pg, nvm_dev_get_name(group->ssd_list[j]));
+			else if (res < 0 && j == num-1){
+				printf("read page %d error in all dev!\n", pg);
+				return 0;
+			}
+			else if (res > 0){
+				printf("read data sucessful in dev %s!\n",nvm_dev_get_name(group->ssd_list[j]));
+				break;
+			}
+		}
+	}
+	return 1;
+}
 	
