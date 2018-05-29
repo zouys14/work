@@ -126,7 +126,7 @@ int ssd_group_write(struct ssd_group *group, struct nvm_addr blk_addr, struct nv
 	char *meta_w = NULL;
 
 	int meta_nbytes = naddrs * geo->meta_nbytes;
-	
+
 	meta_w = nvm_buf_alloc(geo, meta_nbytes);
 	if (!meta_w) {
 		printf("alloc meta_w error!\n");

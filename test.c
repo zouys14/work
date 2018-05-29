@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 
+
 static char nvm_dev_path[][NVM_DEV_PATH_LEN] = {"/dev/nvme0n1","/dev/nvme1n1","/dev/nvme2n1","/dev/nvme3n1","/dev/nvme4n1","/dev/nvme5n1","/dev/nvme6n1","/dev/nvme7n1","/dev/nvme8n1"};
 
 int main(){
