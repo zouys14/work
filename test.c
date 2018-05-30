@@ -67,6 +67,11 @@ int main(){
 		printf("read ssd_group_pthread successful!\n");
 	else
 		printf("read ssd_group_pthread failed!\n");
+	
+	printf ("buf_r_g: \n");
+	for( int i = 0; i < 26 * 2; ++i) 
+		printf("%c ",buf_r_g[i]);
+	printf ("\n");
 	free(buf_w_g);
 	free(buf_r_g);
 

@@ -51,9 +51,6 @@ struct ssd_group_thread *create_ssd_group_pthread(char path[][NVM_DEV_PATH_LEN],
 		if (ssd_thread->ssd_group_list[i] == NULL)
 			return NULL;
 	}
-	printf("in func create!!!\n");
-	for (int i = 0; i < num2; i++)
-		ssd_group_pr(ssd_thread->ssd_group_list[i]);
 	return ssd_thread;
 }
 
@@ -364,10 +361,6 @@ int ssd_group_read_pthread(struct ssd_group_thread *group_thread, struct nvm_add
 		free(buf_r_1);
 		free(buf_r_2);
 		free(buf_r_3);
-		printf ("buf_r_g: \n");
-		for( int i = 0; i < 26 * 2; ++i) 
-			printf("%c ",buf_r_g[i]);
-		printf ("\n");
 		return 1;
 	}
 	return 0;
