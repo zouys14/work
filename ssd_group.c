@@ -9,8 +9,7 @@
 struct ssd_group *create_ssd_group(char path[][NVM_DEV_PATH_LEN],int num)
 {
 	struct ssd_group *group;
-	group = malloc(sizeof(* group));
-	group->ssd_number = num;
+	group = (struct ssd_group *) malloc(sizeof(struct ssd_group));
 	for (int i = 0; i < num; i++){
 		group->ssd_list[i] = nvm_dev_open(path[i]);
 		if (!group->ssd_list[i]) {
@@ -19,112 +18,291 @@ struct ssd_group *create_ssd_group(char path[][NVM_DEV_PATH_LEN],int num)
 		}
 		printf("nvm_dev_open %s sucessful!\n",path[i]);
 	}
+	struct nvm_geo *geo = nvm_dev_get_geo(group->ssd_list[0]);
+	for (int i = 0; i < num; ++i)
+		strcpy(group->group_dev_path[i],path[i]);
+
+	group->group_geo =(struct ssd_group_geo *) malloc(sizeof(struct ssd_group_geo)); 
+	
+	group->group_geo->nthreads = num / DEFAULT_DEV_NUMBER;
+	group->group_geo->nchannels = geo->nchannels;	
+	group->group_geo->nluns = geo->nluns;		
+	group->group_geo->nplanes = geo->nplanes;		
+	group->group_geo->nblocks = geo->nblocks;		
+	group->group_geo->npages = geo->npages;		
+	group->group_geo->nsectors = geo->nsectors;	
+
+	group->group_geo->page_nbytes = geo->page_nbytes;	
+	group->group_geo->sector_nbytes = geo->sector_nbytes;	
+	group->group_geo->meta_nbytes = geo->meta_nbytes;	
+
+	group->group_geo->tbytes = (long long)geo->tbytes * group-> group_geo->nthreads;
+
+	group->p_mode = nvm_dev_get_pmode(group->ssd_list[0]);
+	group->meta_mode = nvm_dev_get_meta_mode(group->ssd_list[0]);
 	return group;
 }
 
-struct ssd_group *create_ssd_group_(char path[][NVM_DEV_PATH_LEN],int bgn,int end)
+const struct ssd_group_geo *ssd_group_geo_get(const struct ssd_group *group)
 {
-	struct ssd_group *group;
-	group = malloc(sizeof(* group));
-	group->ssd_number = end - bgn;
-	printf ("begin : %d + end : %d \n",bgn,end);
-	for (int i = bgn; i < end; i++){
-		group->ssd_list[i % (group->ssd_number)] = nvm_dev_open(path[i]);
-		if (!group->ssd_list[i % (group->ssd_number)]) {
-			printf("nvm_dev_open %s error!\n",path[i]);
-			return NULL;
-		}
-		printf("nvm_dev_open %s sucessful!\n",path[i]);
-	}
-	return group;
+	return group->group_geo;
 }
 
-struct ssd_group_thread *create_ssd_group_pthread(char path[][NVM_DEV_PATH_LEN], int num1, int num2)
+int ssd_group_pmode_get(const struct ssd_group *group)
 {
-	struct ssd_group_thread *ssd_thread;
-	ssd_thread = malloc(sizeof(* ssd_thread));
+	return group->p_mode;
+}
 
-	ssd_thread->thread_number = num2;
-	int each_num = num1/num2;
-	for (int i = 0; i < num2; i++){
-		ssd_thread->ssd_group_list[i] = create_ssd_group_(path, i*each_num , (i+1)*each_num);
-		if (ssd_thread->ssd_group_list[i] == NULL)
-			return NULL;
-	}
-	return ssd_thread;
+int ssd_group_meta_mode_get(const struct ssd_group *group)
+{
+	return group->meta_mode;
+}
+
+const struct nvm_geo * ssd_group_origin_geo_get(const struct ssd_group *group)
+{
+	return nvm_dev_get_geo(group->ssd_list[0]);
 }
 
 void ssd_group_pr(const struct ssd_group *group)
 {
-	int num = group->ssd_number;
-	for (int i = 0; i < num; i++){
-		printf("ssd %d:%s\n",i+1,nvm_dev_get_name(group->ssd_list[i]));
-	}
-}
-
-void ssd_group_pr_pthread(const struct ssd_group_thread *group_thread)
-{
-	int num = group_thread->thread_number;
-	for (int i = 0; i < num; i++){
-		printf("thread %d : \n",i);
-		ssd_group_pr(group_thread->ssd_group_list[i]);
-	}
+	printf("ssd group geo : \n");
+	printf("nchannels : %d\n",group->group_geo->nchannels);
+	printf("nluns : %d\n",group->group_geo->nluns);
+	printf("nplanes : %d\n",group->group_geo->nplanes);
+	printf("nblocks : %d\n",group->group_geo->nblocks);
+	printf("npages : %d\n",group->group_geo->npages);
+	printf("nsectors : %d\n",group->group_geo->nsectors);
+	printf("page_nbytes : %d\n",group->group_geo->page_nbytes);
+	printf("sector_nbytes : %d\n",group->group_geo->sector_nbytes);
+	printf("meta_nbytes : %d\n",group->group_geo->meta_nbytes);
+	printf("tbytes : %lld\n",group->group_geo->tbytes);		
+	printf("ssd group mode : \n");
+	printf("pmode : %d\n",group->p_mode);
+	printf("metamode : %d\n",group->meta_mode);
 }
 
 void free_ssd_group(struct ssd_group *group)
 {
-	int num = group->ssd_number;
+	int num = group->group_geo->nthreads * DEFAULT_DEV_NUMBER;
 	for (int i = 0; i < num; i++){
 		nvm_dev_close(group->ssd_list[i]);
 	}
+	free(group->group_geo);
 	free(group);	
 }
 
-void free_ssd_group_pthread(struct ssd_group_thread *group_thread)
+int ssd_group_erase(struct ssd_group *group, struct ssd_group_addr page_addr, struct nvm_ret *ret)
 {
-	int num = group_thread->thread_number;
-	for (int i = 0; i < num; i++)
-		free_ssd_group(group_thread->ssd_group_list[i]);
-	free(group_thread);
+	struct ssd_group_geo *geo = ssd_group_geo_get(group); 
+	int naddrs = geo->nthreads;
+	
+	struct ssd_group_addr addrs[naddrs];
+	struct para_g para[naddrs];
+
+	for (int i = 0; i < naddrs; ++i){
+		addrs[i].ppa = page_addr.ppa;
+		addrs[i].g.pth = i;
+		
+		para[i].group_ = group;
+		para[i].page_addr_ = addrs[i];
+		para[i].geo_ = geo;
+		para[i].buf_g_ = NULL;
+		para[i].ret_ = ret;
+	}
+
+	pthread_t t1,t2,t3;
+	int ret1,ret2,ret3;
+	
+	ret1 = pthread_create(&t1,NULL,ssd_group_erase_struct,&(para[0]));
+	if (ret1 != 0)
+		printf("erase pthread 0 error!\n");
+	ret2 = pthread_create(&t2,NULL,ssd_group_erase_struct,&(para[1]));
+	if (ret2 != 0)
+		printf("erase pthread 1 error!\n");
+	ret3 = pthread_create(&t3,NULL,ssd_group_erase_struct,&(para[2]));
+	if (ret3 != 0)
+		printf("erase pthread 2 error!\n");
+	void *a1, *a2, *a3;
+	pthread_join(t1,&a1);
+	pthread_join(t2,&a2);
+	pthread_join(t3,&a3);
+
+	if ((int *)a1 > 0 && (int *)a2 > 0 && (int *)a3 > 0)
+		return 1;
+	return 0;
 }
 
-int ssd_group_erase(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm_geo *geo, struct nvm_ret *ret)
+int ssd_group_write(struct ssd_group *group, struct ssd_group_addr page_addr, char *buf_w, struct nvm_ret *ret)
 {
-	int naddrs = geo->nplanes * geo->nsectors;
-	int pmode = nvm_dev_get_pmode(group->ssd_list[0]);
-	struct nvm_addr addrs[naddrs];
+	printf("begin ssd group write!!!\n");
+	struct ssd_group_geo *geo = ssd_group_geo_get(group); 
+	int naddrs = geo->nthreads;
+	
+	struct ssd_group_addr addrs[naddrs];
+	struct para_g para[naddrs];
+	
+	int buf_nbytes = geo->nplanes * geo->nsectors * geo->sector_nbytes;
+	int buf_nbytes_g = buf_nbytes * naddrs;
+	char **buf_w_ = malloc(sizeof(char *) * naddrs);
+	for (int i = 0; i < naddrs; ++i)
+		buf_w_[i] = nvm_buf_alloc(ssd_group_origin_geo_get(group), buf_nbytes);
+	
+	for (int i = 0; i < buf_nbytes_g; ++i) {
+		buf_w_[i/buf_nbytes][i%buf_nbytes] = buf_w[i];
+	}
 
+	for (int i = 0; i < naddrs; ++i){
+		addrs[i].ppa = page_addr.ppa;
+		addrs[i].g.pth = i;
+		
+		para[i].group_ = group;
+		para[i].page_addr_ = addrs[i];
+		para[i].geo_ = geo;
+		para[i].buf_g_ = buf_w_[i];
+		para[i].ret_ = ret;
+	}
+
+	pthread_t t1,t2,t3;
+	int ret1,ret2,ret3;
+	ret1 = pthread_create(&t1,NULL,ssd_group_write_struct,&(para[0]));
+	if (ret1 != 0)
+		printf("write pthread 0 error!\n");
+	ret2 = pthread_create(&t2,NULL,ssd_group_write_struct,&(para[1]));
+	if (ret2 != 0)
+		printf("write pthread 1 error!\n");
+	ret3 = pthread_create(&t3,NULL,ssd_group_write_struct,&(para[2]));
+	if (ret3 != 0)
+		printf("write pthread 2 error!\n");
+	void *a1, *a2, *a3;
+	pthread_join(t1,&a1);
+	pthread_join(t2,&a2);
+	pthread_join(t3,&a3);
+	
+	for (int i = 0; i < naddrs; ++i)
+		free(buf_w_[i]);
+	free(buf_w_);
+
+	if ((int *)a1 > 0 && (int *)a2 > 0 && (int *)a3 > 0)
+		return 1;
+	return 0;
+}
+
+int ssd_group_read(struct ssd_group *group, struct ssd_group_addr page_addr, char *buf_r, struct nvm_ret *ret)
+{
+	struct ssd_group_geo *geo = ssd_group_geo_get(group); 
+	int naddrs = geo->nthreads;
+	
+	struct ssd_group_addr addrs[naddrs];
+	struct para_g para[naddrs];
+	
+	int buf_nbytes = geo->nplanes * geo->nsectors * geo->sector_nbytes;
+	int buf_nbytes_g = buf_nbytes * naddrs;
+	char **buf_r_ = malloc(sizeof(char *) * naddrs);
+	for (int i = 0; i < naddrs; ++i){
+		buf_r_[i] = nvm_buf_alloc(ssd_group_origin_geo_get(group), buf_nbytes);
+		memset(buf_r_[i], 0 , buf_nbytes);
+	}
+
+	for (int i = 0; i < naddrs; ++i){
+		addrs[i].ppa = page_addr.ppa;
+		addrs[i].g.pth = i;
+		
+		para[i].group_ = group;
+		para[i].page_addr_ = addrs[i];
+		para[i].geo_ = geo;
+		para[i].buf_g_ = buf_r_[i];
+		para[i].ret_ = ret;
+	}
+
+	pthread_t t1,t2,t3;
+	int ret1,ret2,ret3;
+	
+	ret1 = pthread_create(&t1,NULL,ssd_group_read_struct,&(para[0]));
+	if (ret1 != 0)
+		printf("read pthread 0 error!\n");
+	ret2 = pthread_create(&t2,NULL,ssd_group_read_struct,&(para[1]));
+	if (ret2 != 0)
+		printf("read pthread 1 error!\n");
+	ret3 = pthread_create(&t3,NULL,ssd_group_read_struct,&(para[2]));
+	if (ret3 != 0)
+		printf("read pthread 2 error!\n");
+	void *a1, *a2, *a3;
+	pthread_join(t1,&a1);
+	pthread_join(t2,&a2);
+	pthread_join(t3,&a3);
+	
+	for (int i = 0; i < buf_nbytes_g; ++i) {
+		buf_r[i] = buf_r_[i/buf_nbytes][i%buf_nbytes];
+	}	
+	for (int i = 0; i < naddrs; ++i)
+		free(buf_r_[i]);
+	free(buf_r_);
+
+	if ((int *)a1 > 0 && (int *)a2 > 0 && (int *)a3 > 0)
+		return 1;
+	return 0;
+}
+
+int ssd_group_erase_struct(void *para_struct)
+{
+	struct para_g *para = (struct para_g *) para_struct;
+	struct ssd_group *group = (*para).group_;
+	struct ssd_group_addr page_addr = (*para).page_addr_;
+	struct ssd_group_geo *geo = (*para).geo_;
+	char *buf_g = (*para).buf_g_;
+	struct nvm_ret *ret = (*para).ret_;
+	
+	struct nvm_addr addr;
+	addr.ppa = page_addr.ppa;
+	addr.g.blk = (addr.g.blk) / 4;
+	int thread = page_addr.g.pth;
+	
+	int pmode = ssd_group_pmode_get(group);
+	int naddrs = geo->nplanes;
+	struct nvm_addr addrs[naddrs];
+	
 	if (pmode) {
-		addrs[0].ppa = blk_addr.ppa;
+		addrs[0].ppa = addr.ppa;
 	} else {
 		for (int pl = 0; pl < geo->nplanes; ++pl) {
-			addrs[pl].ppa = blk_addr.ppa;
-
+			addrs[pl].ppa = addr.ppa;
 			addrs[pl].g.pl = pl;
 		}
 	}
-	int num = group->ssd_number;
-	for (int i = 0; i < num; i++){
-		int res = nvm_addr_erase(group->ssd_list[i], addrs, pmode ? 1 : geo->nplanes, pmode, ret);
+
+	int res = -1;
+	for (int i = 0; i < DEFAULT_DEV_NUMBER; i++){
+		res = nvm_addr_erase(group->ssd_list[i + thread * DEFAULT_DEV_NUMBER], addrs, pmode ? 1 : geo->nplanes, pmode, ret);
 		if (res < 0){
-			printf("erase %s error!\n", nvm_dev_get_name(group->ssd_list[i]));
+			printf("erase %s error!\n", nvm_dev_get_name(group->ssd_list[i + thread * DEFAULT_DEV_NUMBER]));
 			return 0;
 		}
 	}
 	return 1;
 }
 
-int ssd_group_write(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm_geo *geo, char *buf_w, struct nvm_ret *ret)
+int ssd_group_write_struct(void *para_struct)
 {
+	struct para_g *para = (struct para_g *) para_struct;
+	struct ssd_group *group = (*para).group_;
+	struct ssd_group_addr page_addr = (*para).page_addr_;
+	struct ssd_group_geo *geo = (*para).geo_;
+	char *buf_w = (*para).buf_g_;
+	struct nvm_ret *ret = (*para).ret_;
+
+	struct nvm_addr addr;
+	addr.ppa = page_addr.ppa;
+	addr.g.blk = (addr.g.blk) / 4;
+	int thread = page_addr.g.pth;
+	
+	int pmode = ssd_group_pmode_get(group);
 	int naddrs = geo->nplanes * geo->nsectors;
-	int use_meta = 0;
-	int pmode = nvm_dev_get_pmode(group->ssd_list[0]);
+	int use_meta = ssd_group_meta_mode_get(group);
 	struct nvm_addr addrs[naddrs];
+
 	char *meta_w = NULL;
-
 	int meta_nbytes = naddrs * geo->meta_nbytes;
-
-	meta_w = nvm_buf_alloc(geo, meta_nbytes);
+	meta_w = nvm_buf_alloc(ssd_group_origin_geo_get(group), meta_nbytes);
 	if (!meta_w) {
 		printf("alloc meta_w error!\n");
 		return 0;
@@ -147,221 +325,76 @@ int ssd_group_write(struct ssd_group *group, struct nvm_addr blk_addr, struct nv
 		memcpy(meta_w + i * geo->meta_nbytes, meta_descr,
 		       strlen(meta_descr));
 	}
-	
-	for (int pg = 0; pg < geo->npages; ++pg) {
-		for (int i = 0; i < naddrs; ++i) {
-			addrs[i].ppa = blk_addr.ppa;
+	for (int i = 0; i < naddrs; ++i) {
+		addrs[i].ppa = addr.ppa;
+		addrs[i].g.sec = i % geo->nsectors;
+		addrs[i].g.pl = (i / geo->nsectors) % geo->nplanes;
+	}
 
-			addrs[i].g.pg = pg;
-			addrs[i].g.sec = i % geo->nsectors;
-			addrs[i].g.pl = (i / geo->nsectors) % geo->nplanes;
+	int res = -1;
+	for (int i = 0; i < DEFAULT_DEV_NUMBER; i++){
+		res = nvm_addr_write(group->ssd_list[i + thread * DEFAULT_DEV_NUMBER], addrs, naddrs, buf_w, use_meta ? meta_w : NULL, pmode, ret);
+		if (res < 0) {
+			printf("write data error in dev %s!\n",nvm_dev_get_name(group->ssd_list[i + thread * DEFAULT_DEV_NUMBER]));
+			return 0;
 		}
-
-		int num = group->ssd_number;
-		int res = -1;
-		for (int j = 0; j < num; j++){
-			res = nvm_addr_write(group->ssd_list[j], addrs, naddrs, buf_w, use_meta ? meta_w : NULL, pmode, ret);
-			if (res < 0) {
-				printf("write data error in dev %s!\n",nvm_dev_get_name(group->ssd_list[j]));
-				return 0;
-			}
-		}
+		else
+			printf("write data sucessful in dev %s!\n",nvm_dev_get_name(group->ssd_list[i + thread * DEFAULT_DEV_NUMBER]));
 	}
 	return 1;
-}
-
-int ssd_group_read(struct ssd_group *group, struct nvm_addr blk_addr, struct nvm_geo *geo, char *buf_r, struct nvm_ret *ret)
-{
-	int naddrs = geo->nplanes * geo->nsectors;
-	int use_meta = 0;
-	int pmode = nvm_dev_get_pmode(group->ssd_list[0]);
-	struct nvm_addr addrs[naddrs];
-	char *meta_r = NULL;
-	
-	int buf_nbytes = naddrs * geo->sector_nbytes;
-	int meta_nbytes = naddrs * geo->meta_nbytes;
-
-	meta_r = nvm_buf_alloc(geo, meta_nbytes);
-	if (!meta_r) {
-		printf("alloc meta_r error!\n");
-		return 0;
-	}
-
-	for (int pg = 0; pg < geo->npages; ++pg) {
-		for (int i = 0; i < naddrs; ++i) {
-			addrs[i].ppa = blk_addr.ppa;
-
-			addrs[i].g.pg = pg;
-			addrs[i].g.pl = (i / geo->nsectors) % geo->nplanes;
-			addrs[i].g.sec = i % geo->nsectors;
-		}
-
-		memset(buf_r, 0, buf_nbytes);
-		if (use_meta)
-			memset(meta_r, 0 , meta_nbytes);
-		int num = group->ssd_number;
-		int res = -1;
-		for (int j = 0; j < num; j++){
-			res = nvm_addr_read(group->ssd_list[j], addrs, naddrs, buf_r, use_meta ? meta_r : NULL, pmode, ret);
-			if (res < 0 && j < num-1) 
-				printf("read page %d error in dev %s!\n", pg, nvm_dev_get_name(group->ssd_list[j]));
-			else if (res < 0 && j == num-1){
-				printf("read page %d error in all dev!\n", pg);
-				return 0;
-			}
-			else if (res == 0){
-				break;
-			}
-		}
-	}
-	return 1;
-}
-
-int ssd_group_write_struct(void *para_struct)
-{
-	struct para_g *para = (struct para_g *) para_struct;
-	struct ssd_group *group = (*para).group_;
-	struct nvm_addr blk_addr = (*para).blk_addr_;
-	struct nvm_geo *geo = (*para).geo_;
-	char *buf_g = (*para).buf_g_;
-	struct nvm_ret *ret = (*para).ret_;
-	return (ssd_group_write(group, blk_addr, geo, buf_g, ret));
 }
 
 int ssd_group_read_struct(void *para_struct)
 {
 	struct para_g *para = (struct para_g *) para_struct;
 	struct ssd_group *group = (*para).group_;
-	struct nvm_addr blk_addr = (*para).blk_addr_;
-	struct nvm_geo *geo = (*para).geo_;
-	char *buf_g = (*para).buf_g_;
+	struct ssd_group_addr page_addr = (*para).page_addr_;
+	struct ssd_group_geo *geo = (*para).geo_;
+	char *buf_r = (*para).buf_g_;
 	struct nvm_ret *ret = (*para).ret_;
-	return (ssd_group_read(group, blk_addr, geo, buf_g, ret));
-}
+	
+	struct nvm_addr addr;
+	addr.ppa = page_addr.ppa;
+	addr.g.blk = (addr.g.blk) / 4;
+	int thread = page_addr.g.pth;
+	
+	int pmode = ssd_group_pmode_get(group);
+	int naddrs = geo->nplanes * geo->nsectors;
+	int use_meta = ssd_group_meta_mode_get(group);
+	struct nvm_addr addrs[naddrs];
 
-int ssd_group_erase_pthread(struct ssd_group_thread *group_thread, struct nvm_addr blk_addr, struct nvm_geo *geo, struct nvm_ret *ret)
-{
-	int num = group_thread->thread_number;
-	for (int i = 0; i < num; i++){
-		if (ssd_group_erase(group_thread->ssd_group_list[i], blk_addr, geo, ret) == 0)
+	char *meta_r = NULL;	
+	int buf_nbytes = naddrs * geo->sector_nbytes;
+	int meta_nbytes = naddrs * geo->meta_nbytes;
+
+	meta_r = nvm_buf_alloc(ssd_group_origin_geo_get(group), meta_nbytes);
+	if (!meta_r) {
+		printf("alloc meta_r error!\n");
+		return 0;
+	}
+
+	for (int i = 0; i < naddrs; ++i) {
+		addrs[i].ppa = addr.ppa;
+		addrs[i].g.pl = (i / geo->nsectors) % geo->nplanes;
+		addrs[i].g.sec = i % geo->nsectors;
+	}
+
+	memset(buf_r, 0, buf_nbytes);
+	if (use_meta)
+		memset(meta_r, 0 , meta_nbytes);
+	int res = -1;
+	for (int i = 0; i < DEFAULT_DEV_NUMBER; ++i){
+		res = nvm_addr_read(group->ssd_list[i + thread * DEFAULT_DEV_NUMBER], addrs, naddrs, buf_r, use_meta ? meta_r : NULL, pmode, ret);
+		if (res < 0 && i < DEFAULT_DEV_NUMBER - 1) 
+			printf("read error in dev %s!\n",  nvm_dev_get_name(group->ssd_list[i + thread * DEFAULT_DEV_NUMBER]));
+		else if (res < 0 && i == DEFAULT_DEV_NUMBER - 1){
+			printf("read error in all dev!\n");
 			return 0;
+		}
+		else if (res == 0){
+			break;
+		}
 	}
 	return 1;
 }
 
-int ssd_group_write_pthread(struct ssd_group_thread *group_thread, struct nvm_addr blk_addr, struct nvm_geo *geo, char *buf_w_g, struct nvm_ret *ret)
-{
-	pthread_t t1,t2,t3;
-	int ret1,ret2,ret3;
-	int naddrs = geo->nplanes * geo->nsectors;
-	int buf_nbytes = naddrs * geo->sector_nbytes;
-	char *buf_w_1 = nvm_buf_alloc(geo, buf_nbytes);
-	char *buf_w_2 = nvm_buf_alloc(geo, buf_nbytes);
-	char *buf_w_3 = nvm_buf_alloc(geo, buf_nbytes);
-	for (int i = 0; i < buf_nbytes; ++i) {
-		buf_w_1[i] = buf_w_g[i*3];
-		buf_w_2[i] = buf_w_g[i*3+1];
-		buf_w_3[i] = buf_w_g[i*3+2];
-	}
-	struct para_g para1,para2,para3;
-	para1.group_ = group_thread->ssd_group_list[0];
-	para1.blk_addr_ = blk_addr;
-	para1.geo_ = geo;
-	para1.buf_g_ = buf_w_1;
-	para1.ret_ = ret;
-	
-	para2.group_ = group_thread->ssd_group_list[1];
-	para2.blk_addr_ = blk_addr;
-	para2.geo_ = geo;
-	para2.buf_g_ = buf_w_2;
-	para2.ret_ = ret;
-
-	para3.group_ = group_thread->ssd_group_list[2];
-	para3.blk_addr_ = blk_addr;
-	para3.geo_ = geo;
-	para3.buf_g_ = buf_w_3;
-	para3.ret_ = ret;
-	
-	ret1 = pthread_create(&t1,NULL,ssd_group_write_struct,&(para1));
-	if (ret1 != 0)
-		printf("write pthread 1 error!\n");
-	ret2 = pthread_create(&t2,NULL,ssd_group_write_struct,&(para2));
-	if (ret2 != 0)
-		printf("write pthread 2 error!\n");
-	ret3 = pthread_create(&t3,NULL,ssd_group_write_struct,&(para3));
-	if (ret3 != 0)
-		printf("write pthread 3 error!\n");
-	void *a1, *a2, *a3;
-	pthread_join(t1,&a1);
-	pthread_join(t2,&a2);
-	pthread_join(t3,&a3);
-	printf("a1:%d + a2:%d + a3:%d\n",(int *)a1, (int *)a2, (int *)a3);
-	free(buf_w_1);
-	free(buf_w_2);
-	free(buf_w_3);
-	if ((int *)a1 > 0 && (int *)a2 > 0 && (int *)a3 > 0)
-		return 1;
-	return 0;
-}
-
-int ssd_group_read_pthread(struct ssd_group_thread *group_thread, struct nvm_addr blk_addr, struct nvm_geo *geo, char *buf_r_g, struct nvm_ret *ret)
-{
-	pthread_t t1,t2,t3;
-	int ret1,ret2,ret3;
-	int naddrs = geo->nplanes * geo->nsectors;
-	int buf_nbytes = naddrs * geo->sector_nbytes;
-	char *buf_r_1 = nvm_buf_alloc(geo, buf_nbytes);
-	char *buf_r_2 = nvm_buf_alloc(geo, buf_nbytes);
-	char *buf_r_3 = nvm_buf_alloc(geo, buf_nbytes);
-	
-	memset(buf_r_1, 0 , buf_nbytes);
-	memset(buf_r_2, 0 , buf_nbytes);
-	memset(buf_r_3, 0 , buf_nbytes);
-
-
-	struct para_g para1,para2,para3;
-	para1.group_ = group_thread->ssd_group_list[0];
-	para1.blk_addr_ = blk_addr;
-	para1.geo_ = geo;
-	para1.buf_g_ = buf_r_1;
-	para1.ret_ = ret;
-	
-	para2.group_ = group_thread->ssd_group_list[1];
-	para2.blk_addr_ = blk_addr;
-	para2.geo_ = geo;
-	para2.buf_g_ = buf_r_2;
-	para2.ret_ = ret;
-
-	para3.group_ = group_thread->ssd_group_list[2];
-	para3.blk_addr_ = blk_addr;
-	para3.geo_ = geo;
-	para3.buf_g_ = buf_r_3;
-	para3.ret_ = ret;
-	
-	ret1 = pthread_create(&t1,NULL,ssd_group_read_struct,&(para1));
-	if (ret1 != 0)
-		printf("read pthread 1 error!\n");
-	ret2 = pthread_create(&t2,NULL,ssd_group_read_struct,&(para2));
-	if (ret2 != 0)
-		printf("read pthread 2 error!\n");
-	ret3 = pthread_create(&t3,NULL,ssd_group_read_struct,&(para3));
-	if (ret3 != 0)
-		printf("read pthread 3 error!\n");
-	void *a1, *a2, *a3;
-	pthread_join(t1,&a1);
-	pthread_join(t2,&a2);
-	pthread_join(t3,&a3);
-	printf("a1:%d + a2:%d + a3:%d\n",(int *)a1, (int *)a2, (int *)a3);
-	if ((int *)a1 > 0 && (int *)a2 > 0 && (int *)a3 > 0){
-		for (int i = 0; i < buf_nbytes; ++i) {
-			buf_r_g[i*3] = buf_r_1[i];
-			buf_r_g[i*3+1] = buf_r_2[i];
-			buf_r_g[i*3+2] = buf_r_3[i] ;
-		}
-		free(buf_r_1);
-		free(buf_r_2);
-		free(buf_r_3);
-		return 1;
-	}
-	return 0;
-}
