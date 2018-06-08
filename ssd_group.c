@@ -526,4 +526,3 @@ int ssd_group_error_handle(struct ssd_group *group, struct nvm_dev *dev, struct 
 	return 1;
 }
 
-

@@ -51,24 +51,24 @@ write:
 read:
 
 96kb * 5
-erase:
-write:
-read:
+erase:	15417	15413
+write:	72698	71024
+read:	7775	8534
 
 96kb * 64
-erase:
-write:
-read:
+erase:	15585	15482
+write:	729086	718300
+read:	74344	71718
 
 96kb * 256
-erase:
-write:
-read:
+erase:	92630	92663
+write:	4293979	4297770
+read:	444693	447943
 
 96kb * 512
-erase:
-write:
-read:
+erase:	185668	184717	184818	184867	184923
+write:	9006642	8578531	8628991	8624713`8872318
+read:	749776	882250	888467	883496	862381
 
 
 
