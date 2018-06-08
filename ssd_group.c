@@ -16,7 +16,6 @@ struct ssd_group *create_ssd_group(char path[][NVM_DEV_PATH_LEN],int num)
 			printf("nvm_dev_open %s error!\n",path[i]);
 			return NULL;
 		}
-		printf("nvm_dev_open %s sucessful!\n",path[i]);
 	}
 	struct nvm_geo *geo = nvm_dev_get_geo(group->ssd_list[0]);
 	for (int i = 0; i < num; ++i)
@@ -134,7 +133,6 @@ int ssd_group_erase(struct ssd_group *group, struct ssd_group_addr page_addr, st
 
 int ssd_group_write(struct ssd_group *group, struct ssd_group_addr page_addr, char *buf_w, struct nvm_ret *ret)
 {
-	printf("begin ssd group write!!!\n");
 	struct ssd_group_geo *geo = ssd_group_geo_get(group); 
 	int naddrs = 0;
 	
@@ -154,7 +152,6 @@ int ssd_group_write(struct ssd_group *group, struct ssd_group_addr page_addr, ch
 	struct para_g para[naddrs];
 
 	int buf_nbytes_g = buf_nbytes * naddrs;
-	printf("naddrs : %d + buf_len : %d + buf_nbtes : %d\n", naddrs,buf_len,buf_nbytes);
 
 	char **buf_w_ = malloc(sizeof(char *) * naddrs);
 	for (int i = 0; i < naddrs; ++i)
@@ -179,7 +176,6 @@ int ssd_group_write(struct ssd_group *group, struct ssd_group_addr page_addr, ch
 	int ret1,ret2,ret3;
 
 	if (naddrs == 1){
-		printf("naddrs : 1\n");
 		ret1 = pthread_create(&t1,NULL,ssd_group_write_struct,&(para[0]));
 		if (ret1 != 0)
 			printf("write pthread 0 error!\n");
@@ -194,7 +190,6 @@ int ssd_group_write(struct ssd_group *group, struct ssd_group_addr page_addr, ch
 	}
 
 	else if (naddrs == 2){
-		printf("naddrs : 2\n");
 		ret1 = pthread_create(&t1,NULL,ssd_group_write_struct,&(para[0]));
 		if (ret1 != 0)
 			printf("write pthread 0 error!\n");
@@ -215,7 +210,6 @@ int ssd_group_write(struct ssd_group *group, struct ssd_group_addr page_addr, ch
 	}
 
 	else if (naddrs == 3){
-		printf("naddrs : 3\n");
 		ret1 = pthread_create(&t1,NULL,ssd_group_write_struct,&(para[0]));
 		if (ret1 != 0)
 			printf("write pthread 0 error!\n");
@@ -348,8 +342,6 @@ int ssd_group_write_struct(void *para_struct)
 	addr.ppa = page_addr.ppa;
 	addr.g.blk = (addr.g.blk) / 4;
 	int thread = page_addr.g.pth;
-	printf("thread : %d + ", thread);
-	printf("buf_w len: %d\n",strlen(buf_w));
 	
 	int pmode = ssd_group_pmode_get(group);
 	int naddrs = geo->nplanes * geo->nsectors;
@@ -533,4 +525,5 @@ int ssd_group_error_handle(struct ssd_group *group, struct nvm_dev *dev, struct 
 	free(meta_w);
 	return 1;
 }
+
 
