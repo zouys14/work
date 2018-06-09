@@ -32,7 +32,7 @@ int main(){
 	struct ssd_group_geo *geo = ssd_group_geo_get(group);
 	int naddrs = geo->nplanes * geo->nsectors;
 	int buf_nbytes = naddrs * geo->sector_nbytes;
-	int page_num = 64;
+	int page_num =  512 * 3;
         int buf_nbytes_g = buf_nbytes * page_num;
 	printf ("buf_nbytes_g :%d\n",buf_nbytes_g); 
 
@@ -83,7 +83,7 @@ int main(){
 		e_time += tv.tv_sec*1000000 + tv.tv_usec - be;
 	
 		for (int i = 0; i < geo->npages ;i++){
-			if (i >= page_num)
+			if (i >= page_num - j * 128)
 				break;
 			page_addr.g.pg = i;
 			
