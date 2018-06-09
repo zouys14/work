@@ -32,7 +32,7 @@ int main(){
 	struct ssd_group_geo *geo = ssd_group_geo_get(group);
 	int naddrs = geo->nplanes * geo->nsectors;
 	int buf_nbytes = naddrs * geo->sector_nbytes;
-	int page_num = 1;
+	int page_num = 64;
         int buf_nbytes_g = buf_nbytes * page_num;
 	printf ("buf_nbytes_g :%d\n",buf_nbytes_g); 
 
