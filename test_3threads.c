@@ -66,6 +66,7 @@ int main(){
 	long long r_time = 0;
 	int res = -1;
 	for (int j = 0; j < page_num/geo->npages; j++) {
+		printf("j : + %d\n",j);
 		if (blk + j >= geo->nblocks)
 			return 1;
 		page_addr.g.blk = blk + j;
@@ -77,7 +78,6 @@ int main(){
 		e_time += tv.tv_sec*1000000 + tv.tv_usec - be;
 	
 		for (int i = 0; i < geo->npages ;i++){
-			printf("page : %d\n", i);
 			page_addr.g.pg = i;
 			
 			gettimeofday(&tv,NULL);

@@ -83,6 +83,12 @@ int ssd_group_write_struct(void *para_struct);
 
 int ssd_group_read_struct(void *para_struct);
 
+int ssd_erase_struct(struct para_g *para);
+
+int ssd_write_struct(struct para_g *para);
+
+int ssd_read_struct(struct para_g *para);
+
 int ssd_group_error_handle(struct ssd_group *group, struct nvm_dev *dev, struct ssd_group_addr blk_addr, struct nvm_ret *ret);
 
 #endif

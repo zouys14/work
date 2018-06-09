@@ -32,7 +32,7 @@ int main(){
 	struct ssd_group_geo *geo = ssd_group_geo_get(group);
 	int naddrs = geo->nplanes * geo->nsectors;
 	int buf_nbytes = naddrs * geo->sector_nbytes;
-	int page_num = 5 * geo->nthreads;
+	int page_num = 1;
         int buf_nbytes_g = buf_nbytes * page_num;
 	printf ("buf_nbytes_g :%d\n",buf_nbytes_g); 
 
@@ -65,28 +65,26 @@ int main(){
 	int res = -1;
 	void *a;
 	pthread_t t;
-	struct para_g para;
+	struct para_g *para = malloc(sizeof(struct para_g));
 	for (int j = 0; j < ((page_num-1)/geo->npages)+1; j++) {
+		printf("j : + %d\n",j);
 		if (blk + j >= geo->nblocks)
 			return 1;
 		page_addr.g.blk = blk + j;
 		gettimeofday(&tv,NULL);
 		be = tv.tv_sec*1000000 + tv.tv_usec;
-		para.group_ = group;
-		para.page_addr_ = page_addr;
-		para.geo_ = geo;
-		para.buf_g_ = NULL;
-		para.ret_ = ret;
-		pthread_create(&t,NULL,ssd_group_erase_struct,&(para));
-		pthread_join(t, &a);
-		if ((int *) a > 0);
+		para->group_ = group;
+		para->page_addr_ = page_addr;
+		para->geo_ = geo;
+		para->buf_g_ = NULL;
+		para->ret_ = ret;
+		ssd_erase_struct(para);
 		gettimeofday(&tv,NULL);
 		e_time += tv.tv_sec*1000000 + tv.tv_usec - be;
 	
 		for (int i = 0; i < geo->npages ;i++){
 			if (i >= page_num)
 				break;
-			printf("page : %d\n", i);
 			page_addr.g.pg = i;
 			
 			gettimeofday(&tv,NULL);
@@ -97,31 +95,23 @@ int main(){
 			}
 			
 			be = tv.tv_sec*1000000 + tv.tv_usec;
-			para.group_ = group;
-			para.page_addr_ = page_addr;
-			para.geo_ = geo;
-			para.buf_g_ = buf_w_;
-			para.ret_ = ret;
-			pthread_create(&t,NULL,ssd_group_write_struct,&(para));
-			pthread_join(t, &a);
-			if ((int *) a > 0);
-			else
-				printf("write ssd_group failed!\n");
+			para->group_ = group;
+			para->page_addr_ = page_addr;
+			para->geo_ = geo;
+			para->buf_g_ = buf_w_;
+			para->ret_ = ret;
+			ssd_write_struct(para);
 			gettimeofday(&tv,NULL);
 			w_time += tv.tv_sec*1000000 + tv.tv_usec - be;
 	
 			gettimeofday(&tv,NULL);
 			be = tv.tv_sec*1000000 + tv.tv_usec;
-			para.group_ = group;
-			para.page_addr_ = page_addr;
-			para.geo_ = geo;
-			para.buf_g_ = buf_r_;
-			para.ret_ = ret;
-			pthread_create(&t,NULL,ssd_group_read_struct,&(para));
-			pthread_join(t, &a);
-			if ((int *) a > 0);
-			else
-				printf("read ssd_group failed!\n");
+			para->group_ = group;
+			para->page_addr_ = page_addr;
+			para->geo_ = geo;
+			para->buf_g_ = buf_r_;
+			para->ret_ = ret;
+			ssd_read_struct(para);
 			gettimeofday(&tv,NULL);
 			r_time += tv.tv_sec*1000000 + tv.tv_usec - be;
 		}
@@ -134,6 +124,7 @@ int main(){
 	free(buf_w_);
 	free(buf_r_g);
 	free(buf_r_);
+	free(para);
 
 	free_ssd_group(group);
 	return 0;
